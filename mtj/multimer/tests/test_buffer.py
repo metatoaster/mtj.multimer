@@ -162,6 +162,22 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(freeze, 1, 34567, True)
         self.bufferChecker(freeze, 100000, 34567, True)
 
+    def test_0510_freeze(self):
+        buff = TimedBuffer(delta=100, period=3600, timestamp=0,
+            delta_min=0.01, delta_factor=1, value=34567, full=75000)
+
+        timestamp = 14400
+        next_buffer = buff.getCurrent(timestamp, False)
+        self.assertEqual(next_buffer.value, 34967)
+        self.assertEqual(next_buffer.isToBeFrozen(timestamp), False)
+
+        timestamp = 7200
+        next_buffer = buff.getCurrent(timestamp, True)
+        self.assertEqual(next_buffer.value, 34767)
+        # Frozen with less time less than above because it was forced
+        # here.
+        self.assertEqual(next_buffer.isToBeFrozen(timestamp), True)
+
     def test_1000_abnormal_setup(self):
         weird1 = TimedBuffer(delta=40, period=3600, timestamp=0, delta_min=0.325,
             delta_factor=-1, value=140, full=1000)
