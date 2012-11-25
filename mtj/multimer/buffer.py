@@ -15,6 +15,23 @@ class Buffer(object):
         self.value = value
         self.empty = empty
 
+    def getCurrent(self, value=None, *a, **kw):
+        """
+        Specify a current state of this buffer and return it as a copy.
+
+        As full and empty values are considered immutable, they cannot
+        be specified.
+        """
+
+        if value is None:
+            value = self.value
+
+        return self.__class__(
+            full=self.full, 
+            value=value,
+            empty=self.empty,
+            *a, **kw)
+
 
 class TimedBuffer(Buffer):
     """
@@ -53,11 +70,11 @@ class TimedBuffer(Buffer):
 
         super(TimedBuffer, self).__init__(*a, **kw)
 
-    def getCurrent(self, timestamp=None):
+    def getCurrent(self, timestamp=None, *a, **kw):
         """
         Returns a current version of this buffer.
 
-        If timestamp is specified, assume that to be the current time.
+        Timestamp defaults to current time unless it is specified.
         """
 
         if timestamp is None:
@@ -100,15 +117,14 @@ class TimedBuffer(Buffer):
                 (subcycles * subdelta * int(not alive))) * self.delta_factor)
 
         try:
-            result = TimedBuffer(
+            result = super(TimedBuffer, self).getCurrent(
                 delta=self.delta,
                 period=self.period,
                 timestamp=timestamp,
                 delta_min=self.delta_min,
-                full=self.full,
                 value=value,
-                empty=self.empty,
                 alive=alive,
+                *a, **kw
             )
         except AssertionError, e:
             raise RuntimeError('There are bugs in the buffer implementation.')

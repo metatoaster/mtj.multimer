@@ -33,6 +33,14 @@ class TestBuffer(TestCase):
         buf = Buffer(value=10, empty=10)
         self.assertEqual(buf.empty, 10)
 
+    def test_0001_instance(self):
+        buf = Buffer(value=50, full=200, empty=10)
+        newbuf = buf.getCurrent(value=buf.value)
+        self.assertTrue(isinstance(newbuf, Buffer))
+        self.assertEqual(newbuf.value, buf.value)
+        self.assertEqual(newbuf.full, buf.full)
+        self.assertEqual(newbuf.empty, buf.empty)
+
     def test_0010_assertions(self):
         self.assertRaises(AssertionError, Buffer, empty=10)
         self.assertRaises(AssertionError, Buffer, value=10000, full=200)
@@ -54,9 +62,11 @@ class TestTimedBuffer(TestCase):
         pass
 
     def bufferChecker(self, buff, timestamp, value, alive=None):
-        self.assertEqual(buff.getCurrent(timestamp).value, value)
+        next_buffer = buff.getCurrent(timestamp)
+        self.assertTrue(isinstance(next_buffer, TimedBuffer))
+        self.assertEqual(next_buffer.value, value)
         if alive is not None:
-            self.assertEqual(buff.getCurrent(timestamp).alive, alive)
+            self.assertEqual(next_buffer.alive, alive)
 
     def test_0010_assertions(self):
         self.assertRaises(AssertionError, TimedBuffer, period=0)
