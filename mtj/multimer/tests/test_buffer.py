@@ -4,6 +4,8 @@ from mtj.multimer.buffer import Buffer, TimedBuffer
 
 qSilo = lambda value, full: TimedBuffer(delta=100, period=3600, timestamp=0,
     delta_min=0, delta_factor=1, value=value, full=full)
+qSiloDM = lambda value, full: TimedBuffer(delta=100, period=3600, timestamp=0,
+    delta_min=0.01, delta_factor=1, value=value, full=full)
 qLPos = lambda value: TimedBuffer(delta=40, period=3600, timestamp=0,
     delta_min=1, delta_factor=-1, value=value, full=28000)
 qLPosS = lambda value: TimedBuffer(delta=30, period=3600, timestamp=0,
@@ -54,6 +56,10 @@ class TestTimedBuffer(TestCase):
         self.part_silo = qSilo(1234, 60000)
         self.zero_silo = qSilo(0, 60000)
 
+        self.full_silodm = qSiloDM(60000, 60000)
+        self.part_silodm = qSiloDM(1234, 60000)
+        self.zero_silodm = qSiloDM(0, 60000)
+
         self.full_pos = qLPos(28000)
         self.part_pos = qLPos(1234)
         self.zero_pos = qLPos(0)
@@ -61,12 +67,12 @@ class TestTimedBuffer(TestCase):
     def tearDown(self):
         pass
 
-    def bufferChecker(self, buff, timestamp, value, alive=None):
+    def bufferChecker(self, buff, timestamp, value, freeze=None):
         next_buffer = buff.getCurrent(timestamp)
         self.assertTrue(isinstance(next_buffer, TimedBuffer))
         self.assertEqual(next_buffer.value, value)
-        if alive is not None:
-            self.assertEqual(next_buffer.alive, alive)
+        if freeze is not None:
+            self.assertEqual(next_buffer.isToBeFrozen(timestamp), freeze)
 
     def test_0010_assertions(self):
         self.assertRaises(AssertionError, TimedBuffer, period=0)
@@ -76,10 +82,10 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(self.zero_silo, 1, 0)
         self.bufferChecker(self.zero_silo, 3600, 100)
         self.bufferChecker(self.zero_silo, 35999, 900)
-        self.bufferChecker(self.zero_silo, 36000, 1000)
-        self.bufferChecker(self.zero_silo, 2159999, 59900, True)
-        self.bufferChecker(self.zero_silo, 2160000, 60000, True)
-        self.bufferChecker(self.zero_silo, 2163600, 60000, False)
+        self.bufferChecker(self.zero_silo, 36000, 1000, False)
+        self.bufferChecker(self.zero_silo, 2159999, 59900, False)
+        self.bufferChecker(self.zero_silo, 2160000, 60000, False)
+        self.bufferChecker(self.zero_silo, 2163600, 60000, True)
 
     def test_0101_standard_inc(self):
         self.bufferChecker(self.part_silo, 1, 1234)
@@ -87,17 +93,43 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(self.part_silo, 35999, 2134)
         self.bufferChecker(self.part_silo, 36000, 2234)
         self.bufferChecker(self.part_silo, 2113200, 59934)
-        self.bufferChecker(self.part_silo, 2116799, 59934, True)
+        self.bufferChecker(self.part_silo, 2116799, 59934, False)
         # This pushed it over the top.
-        self.bufferChecker(self.part_silo, 2116800, 60000, False)
-        self.bufferChecker(self.part_silo, 2120399, 60000, False)
-        self.bufferChecker(self.part_silo, 2120400, 60000, False)
+        self.bufferChecker(self.part_silo, 2116800, 60000, True)
+        self.bufferChecker(self.part_silo, 2120399, 60000, True)
+        self.bufferChecker(self.part_silo, 2120400, 60000, True)
         self.bufferChecker(self.part_silo, 2160000, 60000)
 
     def test_0102_standard_inc(self):
-        self.bufferChecker(self.full_silo, 1, 60000)
-        self.bufferChecker(self.full_silo, 3600, 60000)
-        self.bufferChecker(self.full_silo, 7201, 60000)
+        self.bufferChecker(self.full_silo, 1, 60000, False)
+        self.bufferChecker(self.full_silo, 3600, 60000, True)
+        self.bufferChecker(self.full_silo, 7201, 60000, True)
+
+    def test_0110_standard_inc_dm(self):
+        self.bufferChecker(self.zero_silodm, 1, 0)
+        self.bufferChecker(self.zero_silodm, 3600, 100)
+        self.bufferChecker(self.zero_silodm, 35999, 900)
+        self.bufferChecker(self.zero_silodm, 36000, 1000, False)
+        self.bufferChecker(self.zero_silodm, 2159999, 59900, False)
+        self.bufferChecker(self.zero_silodm, 2160000, 60000, False)
+        self.bufferChecker(self.zero_silodm, 2163600, 60000, True)
+
+    def test_0111_standard_inc_dm(self):
+        self.bufferChecker(self.part_silodm, 1, 1234)
+        self.bufferChecker(self.part_silodm, 3600, 1334)
+        self.bufferChecker(self.part_silodm, 35999, 2134)
+        self.bufferChecker(self.part_silodm, 36000, 2234)
+        self.bufferChecker(self.part_silodm, 2113200, 59934)
+        self.bufferChecker(self.part_silodm, 2116799, 59934, False)
+        self.bufferChecker(self.part_silodm, 2116800, 60000, True)
+        self.bufferChecker(self.part_silodm, 2120399, 60000, True)
+        self.bufferChecker(self.part_silodm, 2120400, 60000, True)
+        self.bufferChecker(self.part_silodm, 2160000, 60000)
+
+    def test_0112_standard_inc_dm(self):
+        self.bufferChecker(self.full_silodm, 1, 60000, False)
+        self.bufferChecker(self.full_silodm, 3600, 60000, True)
+        self.bufferChecker(self.full_silodm, 7201, 60000, True)
 
     def test_0200_standard_dec(self):
         self.bufferChecker(self.full_pos, 1, 28000)
@@ -105,23 +137,30 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(self.full_pos, 3600, 27960)
         self.bufferChecker(self.full_pos, 3600, 27960)
         self.bufferChecker(self.full_pos, 252000, 25200)
-        self.bufferChecker(self.full_pos, 2519999, 40, True)
-        self.bufferChecker(self.full_pos, 2520000, 0, True)
-        self.bufferChecker(self.full_pos, 2523599, 0, True)
-        self.bufferChecker(self.full_pos, 2523600, 0, False)
+        self.bufferChecker(self.full_pos, 2519999, 40, False)
+        self.bufferChecker(self.full_pos, 2520000, 0, False)
+        self.bufferChecker(self.full_pos, 2523599, 0, False)
+        self.bufferChecker(self.full_pos, 2523600, 0, True)
 
     def test_0201_standard_dec(self):
         self.bufferChecker(self.part_pos, 1, 1234)
         self.bufferChecker(self.part_pos, 3600, 1194)
-        self.bufferChecker(self.part_pos, 107999, 74, True)
-        self.bufferChecker(self.part_pos, 108000, 34, True)
-        self.bufferChecker(self.part_pos, 111599, 34, True)
-        self.bufferChecker(self.part_pos, 111600, 34, False)
+        self.bufferChecker(self.part_pos, 107999, 74, False)
+        self.bufferChecker(self.part_pos, 108000, 34, False)
+        self.bufferChecker(self.part_pos, 111599, 34, False)
+        self.bufferChecker(self.part_pos, 111600, 34, True)
 
     def test_0202_standard_dec(self):
-        self.bufferChecker(self.zero_pos, 1, 0)
-        self.bufferChecker(self.zero_pos, 3600, 0)
-        self.bufferChecker(self.zero_pos, 36000, 0)
+        self.bufferChecker(self.zero_pos, 1, 0, False)
+        self.bufferChecker(self.zero_pos, 3600, 0, True)
+        self.bufferChecker(self.zero_pos, 36000, 0, True)
+
+    def test_0500_freeze(self):
+        freeze = TimedBuffer(delta=100, period=3600, timestamp=0,
+            delta_min=0.01, delta_factor=1, value=34567, full=75000,
+            freeze=True)
+        self.bufferChecker(freeze, 1, 34567, True)
+        self.bufferChecker(freeze, 100000, 34567, True)
 
     def test_1000_abnormal_setup(self):
         weird1 = TimedBuffer(delta=40, period=3600, timestamp=0, delta_min=0.325,
@@ -138,7 +177,7 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(weird1, 3600, 215)
         self.bufferChecker(weird1, 7200, 315)
         self.bufferChecker(weird1, 28800, 915)
-        self.bufferChecker(weird1, 32400, 981, False)
+        self.bufferChecker(weird1, 32400, 981, True)
 
     def test_1002_abnormal_setup(self):
         weird1 = TimedBuffer(delta=100, period=3600, timestamp=0,

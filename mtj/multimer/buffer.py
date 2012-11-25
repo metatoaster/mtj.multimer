@@ -42,7 +42,7 @@ class TimedBuffer(Buffer):
     """
 
     def __init__(self, delta=1, period=60, timestamp=None, delta_min=0,
-            delta_factor=1, alive=None, *a, **kw):
+            delta_factor=1, freeze=False, freeze_conditions=None, *a, **kw):
         """
         delta - the change in value made per period of time.
         period - the length of time between application of delta.
@@ -51,6 +51,7 @@ class TimedBuffer(Buffer):
         delta_min - minimum applied delta size, expressed as a fraction
                     of delta.
         delta_factor - post calculation modifier to delta.
+        freeze - The timer is frozen onwards from timestamp.
         """
 
         assert period > 0
@@ -66,44 +67,95 @@ class TimedBuffer(Buffer):
         self.timestamp = timestamp
         self.delta_min = delta_min
         self.delta_factor = delta_factor
-        self.alive = alive
+        self.freeze = freeze
+
+        if freeze_conditions is None:
+            freeze_conditions = []
+        freeze_conditions.append(self.isCyclesDepleted)
+        self.freeze_conditions = freeze_conditions
 
         super(TimedBuffer, self).__init__(*a, **kw)
 
-    def getCurrent(self, timestamp=None, *a, **kw):
+    def isToBeFrozen(self, timestamp=None):
+        """
+        Return whether the next state will be frozen.
+        """
+
+        if self.freeze:
+            return True
+
+        # only calculate if not True.
+        for f in self.freeze_conditions:
+            if f(timestamp):
+                return True
+
+        # No frozen conditions.
+        return False
+
+    def getDelta(self, timestamp=None):
+        if timestamp is None:
+            timestamp = int(time.time())
+        return timestamp - self.timestamp
+
+    def getCyclesElapsed(self, timestamp=None):
+        delta_t = self.getDelta(timestamp)
+        return int(delta_t / self.period)  # truncate decimals.
+
+    def getCyclesAvailable(self):
+        if self.delta_factor < 0:
+            # This is a funny way to do casting/truncating.
+            return int((self.value - self.empty) * 1.0 / self.delta)
+        elif self.delta_factor > 0:
+            return int((self.full - self.value) * 1.0 / self.delta)
+
+    def getCyclesRemaining(self, timestamp=None):
+        return self.getCyclesAvailable() - self.getCyclesElapsed(timestamp)
+
+    def isCyclesDepleted(self, timestamp=None):
+        # must be negative to be considered depleted.
+        return self.getCyclesRemaining(timestamp) < 0
+
+    def getCurrent(self, timestamp=None, freeze=None, *a, **kw):
         """
         Returns a current version of this buffer.
 
         Timestamp defaults to current time unless it is specified.
         """
 
+        # Freeze the time for the duration of this method.
         if timestamp is None:
             timestamp = int(time.time())
 
-        delta_t = timestamp - self.timestamp
-        cycles = int(delta_t / self.period)  # truncate decimals.
+        # Don't use self.isToBeFrozen here, because that is not the 
+        # frozen state when this was instantiatd.
+        if self.freeze:
+            # don't calcaulate anything if already marked frozen.
+            return super(TimedBuffer, self).getCurrent(
+                delta=self.delta,
+                period=self.period,
+                timestamp=timestamp,
+                delta_min=self.delta_min,
+                value=self.value,
+                freeze=self.freeze,
+                *a, **kw
+            )
 
-        # XXX this might be better as a property in subclasses?
-        if self.delta_factor < 0:
-            # This is a funny way to do casting/truncating.
-            available_cycles = int((self.value - self.empty) * 1.0 /
-                self.delta)
-        elif self.delta_factor > 0:
-            available_cycles = int((self.full - self.value) * 1.0 /
-                self.delta)
-
-        alive = cycles <= available_cycles
+        cycles_elapsed = self.getCyclesElapsed(timestamp)
+        cycles_available = self.getCyclesAvailable()
+        cycles_depleted = self.isCyclesDepleted(timestamp)
+        # Figure this out if we are not freezing this.
+        freeze = freeze or self.isToBeFrozen(timestamp)
 
         if not self.delta_min:
             # naive case
-            value = self.value + (cycles * self.delta)
+            value = self.value + (cycles_elapsed * self.delta)
             value = max(self.empty, value)
             value = min(self.full, value)
 
         if self.delta_min:
             # This is where it gets funny, as handling of minimum delta
             # units can be strange on fractions.
-            safe_value = self.value + (available_cycles * self.delta)
+            safe_value = self.value + (cycles_available * self.delta)
 
             if self.delta_factor < 0:
                 remainder = (self.value - self.empty) % self.delta
@@ -113,8 +165,10 @@ class TimedBuffer(Buffer):
             subdelta = int(round(self.delta * self.delta_min))
             subcycles = remainder / subdelta
             # Only apply subcycles after all available cycles are consumed.
-            value = (self.value + (min(cycles, available_cycles) * self.delta +
-                (subcycles * subdelta * int(not alive))) * self.delta_factor)
+            value = (self.value + (min(cycles_elapsed, cycles_available) * 
+                self.delta +
+                (subcycles * subdelta * int(cycles_depleted))) *
+                self.delta_factor)
 
         try:
             result = super(TimedBuffer, self).getCurrent(
@@ -123,7 +177,7 @@ class TimedBuffer(Buffer):
                 timestamp=timestamp,
                 delta_min=self.delta_min,
                 value=value,
-                alive=alive,
+                freeze=freeze,
                 *a, **kw
             )
         except AssertionError, e:
