@@ -98,10 +98,16 @@ class TimedBuffer(Buffer):
         return timestamp - self.timestamp
 
     def getCyclesElapsed(self, timestamp=None):
+        if self.freeze:
+            return 0
+
         delta_t = self.getDelta(timestamp)
         return int(delta_t / self.period)  # truncate decimals.
 
     def getCyclesAvailable(self):
+        if self.freeze:
+            return 0
+
         if self.delta_factor < 0:
             # This is a funny way to do casting/truncating.
             return int((self.value - self.empty) * 1.0 / self.delta)
@@ -126,49 +132,27 @@ class TimedBuffer(Buffer):
         if timestamp is None:
             timestamp = int(time.time())
 
-        # Don't use self.isToBeFrozen here, because that is not the 
-        # frozen state when this was instantiatd.
-        if self.freeze:
-            # don't calcaulate anything if already marked frozen.
-            return super(TimedBuffer, self).getCurrent(
-                delta=self.delta,
-                period=self.period,
-                timestamp=timestamp,
-                delta_min=self.delta_min,
-                value=self.value,
-                freeze=self.freeze,
-                *a, **kw
-            )
-
         cycles_elapsed = self.getCyclesElapsed(timestamp)
         cycles_available = self.getCyclesAvailable()
         cycles_depleted = self.isCyclesDepleted(timestamp)
         # Figure this out if we are not freezing this.
         freeze = freeze or self.isToBeFrozen(timestamp)
 
-        if not self.delta_min:
-            # naive case
-            value = self.value + (cycles_elapsed * self.delta)
-            value = max(self.empty, value)
-            value = min(self.full, value)
+        safe_value = self.value + (cycles_available * self.delta)
 
-        if self.delta_min:
-            # This is where it gets funny, as handling of minimum delta
-            # units can be strange on fractions.
-            safe_value = self.value + (cycles_available * self.delta)
+        if self.delta_factor < 0:
+            remainder = (self.value - self.empty) % self.delta
+        elif self.delta_factor > 0:
+            remainder = (self.full - self.value) % self.delta
 
-            if self.delta_factor < 0:
-                remainder = (self.value - self.empty) % self.delta
-            elif self.delta_factor > 0:
-                remainder = (self.full - self.value) % self.delta
+        # Must be at least 1.
+        subdelta = max(int(round(self.delta * self.delta_min)), 1)
+        subcycles = remainder / subdelta
 
-            subdelta = int(round(self.delta * self.delta_min))
-            subcycles = remainder / subdelta
-            # Only apply subcycles after all available cycles are consumed.
-            value = (self.value + (min(cycles_elapsed, cycles_available) * 
-                self.delta +
-                (subcycles * subdelta * int(cycles_depleted))) *
-                self.delta_factor)
+        # Only apply subcycles after all available cycles are consumed.
+        value = (self.value + (min(cycles_elapsed, cycles_available) * 
+            self.delta + (subcycles * subdelta * int(cycles_depleted))) *
+            self.delta_factor)
 
         try:
             result = super(TimedBuffer, self).getCurrent(
