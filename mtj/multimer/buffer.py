@@ -42,7 +42,8 @@ class TimedBuffer(Buffer):
     """
 
     def __init__(self, delta=1, period=60, timestamp=None, delta_min=0,
-            delta_factor=1, freeze=False, freeze_conditions=None, *a, **kw):
+            delta_factor=1, freeze=False, extra_freeze_conditions=None,
+            *a, **kw):
         """
         delta - the change in value made per period of time.
         period - the length of time between application of delta.
@@ -69,10 +70,11 @@ class TimedBuffer(Buffer):
         self.delta_factor = delta_factor
         self.freeze = freeze
 
-        if freeze_conditions is None:
-            freeze_conditions = []
-        freeze_conditions.append(self.isCyclesDepleted)
-        self.freeze_conditions = freeze_conditions
+        self.freeze_conditions = []
+        self.freeze_conditions.append(self.isCyclesDepleted)
+        self.extra_freeze_conditions = extra_freeze_conditions
+        if self.extra_freeze_conditions:
+            self.freeze_conditions.extend(self.extra_freeze_conditions)
 
         super(TimedBuffer, self).__init__(*a, **kw)
 
@@ -163,6 +165,7 @@ class TimedBuffer(Buffer):
                 delta_min=self.delta_min,
                 value=value,
                 freeze=freeze,
+                extra_freeze_conditions=self.extra_freeze_conditions,
                 *a, **kw
             )
         except AssertionError, e:
