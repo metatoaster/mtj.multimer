@@ -161,22 +161,37 @@ class TestTimedBuffer(TestCase):
             freeze=True)
         self.bufferChecker(freeze, 1, 34567, True)
         self.bufferChecker(freeze, 100000, 34567, True)
+        timestamp = 200000
+        next_buffer = freeze.getCurrent(timestamp, None)  # unspecified
+        self.assertTrue(next_buffer.freeze)
 
     def test_0510_freeze(self):
         buff = TimedBuffer(delta=100, period=3600, timestamp=0,
             delta_min=0.01, delta_factor=1, value=34567, full=75000)
 
         timestamp = 14400
-        next_buffer = buff.getCurrent(timestamp, False)
+        next_buffer = buff.getCurrent(timestamp, None)  # unspecified
         self.assertEqual(next_buffer.value, 34967)
         self.assertEqual(next_buffer.isToBeFrozen(timestamp), False)
 
         timestamp = 7200
         next_buffer = buff.getCurrent(timestamp, True)
+        self.assertTrue(next_buffer.freeze)
         self.assertEqual(next_buffer.value, 34767)
         # Frozen with less time less than above because it was forced
         # here.
         self.assertEqual(next_buffer.isToBeFrozen(timestamp), True)
+
+    def test_0520_unfreeze(self):
+        freeze = TimedBuffer(delta=100, period=3600, timestamp=0,
+            delta_min=0.01, delta_factor=1, value=34567, full=75000,
+            freeze=True)
+        timestamp = 7201
+        next_buffer = freeze.getCurrent(timestamp, False)
+        self.assertFalse(next_buffer.freeze)
+        timestamp = 14400
+        # Unfrozen from 7201 onwards, 2 hours - second passed, +100.
+        self.bufferChecker(next_buffer, timestamp, 34667, False)
 
     def test_1000_abnormal_setup(self):
         weird1 = TimedBuffer(delta=40, period=3600, timestamp=0, delta_min=0.325,

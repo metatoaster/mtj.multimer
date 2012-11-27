@@ -76,21 +76,22 @@ class TimedBuffer(Buffer):
 
         super(TimedBuffer, self).__init__(*a, **kw)
 
-    def isToBeFrozen(self, timestamp=None):
+    def isToBeFrozen(self, timestamp=None, freeze=None):
         """
         Return whether the next state will be frozen.
         """
 
-        if self.freeze:
-            return True
+        if freeze is True:
+            # Freeze always wins.
+            return freeze
 
         # only calculate if not True.
         for f in self.freeze_conditions:
             if f(timestamp):
                 return True
 
-        # No frozen conditions.
-        return False
+        # If unspecified, return the false value.
+        return freeze is None and self.freeze
 
     def getDelta(self, timestamp=None):
         if timestamp is None:
@@ -136,7 +137,7 @@ class TimedBuffer(Buffer):
         cycles_available = self.getCyclesAvailable()
         cycles_depleted = self.isCyclesDepleted(timestamp)
         # Figure this out if we are not freezing this.
-        freeze = freeze or self.isToBeFrozen(timestamp)
+        freeze = self.isToBeFrozen(timestamp, freeze)
 
         safe_value = self.value + (cycles_available * self.delta)
 
