@@ -95,7 +95,7 @@ class TimedBuffer(Buffer):
         # If unspecified, return the false value.
         return freeze is None and self.freeze
 
-    def getDelta(self, timestamp=None):
+    def getDeltaTime(self, timestamp=None):
         if timestamp is None:
             timestamp = int(time.time())
         return timestamp - self.timestamp
@@ -104,7 +104,7 @@ class TimedBuffer(Buffer):
         if self.freeze:
             return 0
 
-        delta_t = self.getDelta(timestamp)
+        delta_t = self.getDeltaTime(timestamp)
         return int(delta_t / self.period)  # truncate decimals.
 
     def getCyclesAvailable(self):
