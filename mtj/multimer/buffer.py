@@ -71,7 +71,7 @@ class TimedBuffer(Buffer):
         self.freeze = freeze
 
         self.freeze_conditions = []
-        self.freeze_conditions.append(self.isCyclesDepleted)
+        self.freeze_conditions.append(TimedBuffer.isCyclesDepleted)
         self.extra_freeze_conditions = extra_freeze_conditions
         if self.extra_freeze_conditions:
             self.freeze_conditions.extend(self.extra_freeze_conditions)
@@ -89,7 +89,7 @@ class TimedBuffer(Buffer):
 
         # only calculate if not True.
         for f in self.freeze_conditions:
-            if f(timestamp):
+            if f(self, timestamp=timestamp):
                 return True
 
         # If unspecified, return the false value.
