@@ -42,8 +42,7 @@ class TimedBuffer(Buffer):
     """
 
     def __init__(self, delta=1, period=60, timestamp=None, delta_min=0,
-            delta_factor=1, freeze=False, extra_freeze_conditions=None,
-            *a, **kw):
+            delta_factor=1, freeze=False, *a, **kw):
         """
         delta - the change in value made per period of time.
         period - the length of time between application of delta.
@@ -70,11 +69,7 @@ class TimedBuffer(Buffer):
         self.delta_factor = delta_factor
         self.freeze = freeze
 
-        self.freeze_conditions = []
-        self.freeze_conditions.append(TimedBuffer.isCyclesDepleted)
-        self.extra_freeze_conditions = extra_freeze_conditions
-        if self.extra_freeze_conditions:
-            self.freeze_conditions.extend(self.extra_freeze_conditions)
+        self.freezePrefix = 'freeze'
 
         super(TimedBuffer, self).__init__(*a, **kw)
 
@@ -83,13 +78,19 @@ class TimedBuffer(Buffer):
         Return whether the next state will be frozen.
         """
 
+        def isFreezeMethod(attrname, prefix=self.freezePrefix):
+            return attrname.startswith(prefix) and \
+                hasattr(getattr(self, attrname), '__call__')
+        freeze_method_names = filter(isFreezeMethod, dir(self))
+
         if freeze is True:
             # Freeze always wins.
             return freeze
 
         # only calculate if not True.
-        for f in self.freeze_conditions:
-            if f(self, timestamp=timestamp):
+        for fname in freeze_method_names:
+            f = getattr(self, fname)
+            if f(timestamp):
                 return True
 
         # If unspecified, return the false value.
@@ -123,6 +124,9 @@ class TimedBuffer(Buffer):
     def isCyclesDepleted(self, timestamp=None):
         # must be negative to be considered depleted.
         return self.getCyclesRemaining(timestamp) < 0
+
+    def freeze_CyclesDepleted(self, timestamp):
+        return self.isCyclesDepleted(timestamp=timestamp)
 
     def getCurrent(self, timestamp=None, freeze=None, *a, **kw):
         """
@@ -165,7 +169,6 @@ class TimedBuffer(Buffer):
                 delta_min=self.delta_min,
                 value=value,
                 freeze=freeze,
-                extra_freeze_conditions=self.extra_freeze_conditions,
                 *a, **kw
             )
         except AssertionError, e:
