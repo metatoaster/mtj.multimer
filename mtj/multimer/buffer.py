@@ -111,7 +111,9 @@ class TimedBuffer(Buffer):
     def getCyclesAvailable(self):
         if self.freeze:
             return 0
+        return self.getCyclesPossible()
 
+    def getCyclesPossible(self):
         if self.delta_factor < 0:
             # This is a funny way to do casting/truncating.
             return int((self.value - self.empty) * 1.0 / self.delta)
