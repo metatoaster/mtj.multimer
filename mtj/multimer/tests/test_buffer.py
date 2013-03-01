@@ -74,7 +74,7 @@ class TestTimedBuffer(TestCase):
         if freeze is not None:
             self.assertEqual(next_buffer.isToBeFrozen(timestamp), freeze)
 
-    def test_0010_assertions(self):
+    def test_0000_assertions(self):
         self.assertRaises(AssertionError, TimedBuffer, period=0)
         self.assertRaises(AssertionError, TimedBuffer, delta_min=-1)
 
@@ -194,8 +194,8 @@ class TestTimedBuffer(TestCase):
         self.bufferChecker(next_buffer, timestamp, 34667, False)
 
     def test_1000_abnormal_setup(self):
-        weird1 = TimedBuffer(delta=40, period=3600, timestamp=0, delta_min=0.325,
-            delta_factor=-1, value=140, full=1000)
+        weird1 = TimedBuffer(delta=40, period=3600, timestamp=0,
+            delta_min=0.325, delta_factor=-1, value=140, full=1000)
         self.bufferChecker(weird1, 3600, 100)
         self.bufferChecker(weird1, 7200, 60)
         self.bufferChecker(weird1, 14399, 20)
