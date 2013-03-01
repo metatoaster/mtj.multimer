@@ -80,7 +80,27 @@ class TestTimedBuffer(TestCase):
 
     def test_0001_base_get(self):
         fp0 = self.full_pos.getCurrent(0)
+
+        self.assertEqual(fp0.delta, self.full_pos.delta)
+        self.assertEqual(fp0.period, self.full_pos.period)
+        self.assertEqual(fp0.timestamp, self.full_pos.timestamp)
+        self.assertEqual(fp0.delta_min, self.full_pos.delta_min)
         self.assertEqual(fp0.delta_factor, self.full_pos.delta_factor)
+        self.assertEqual(fp0.freeze, self.full_pos.freeze)
+        self.assertEqual(fp0.full, self.full_pos.full)
+        self.assertEqual(fp0.empty, self.full_pos.empty)
+        self.assertEqual(fp0.value, self.full_pos.value)
+
+    def test_0050_full_continuous(self):
+        """
+        Test that intermediate buffers can be chained properly.
+        """
+
+        fp0 = self.full_pos.getCurrent(0)
+        # half hour.
+        fp1 = fp0.getCurrent(3600)
+        fp2 = fp1.getCurrent(7200)
+        self.assertEqual(fp2.getCurrent(7200).value, 27920)
 
     def test_0100_standard_inc(self):
         self.bufferChecker(self.zero_silo, 1, 0)
