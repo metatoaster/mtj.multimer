@@ -1,4 +1,5 @@
 import time
+from math import ceil
 
 
 class Buffer(object):
@@ -41,17 +42,22 @@ class TimedBuffer(Buffer):
     period of which this buffer changes, and the delta to apply.
     """
 
-    def __init__(self, delta=1, period=60, timestamp=None, delta_min=0,
-            delta_factor=1, freeze=False, *a, **kw):
+    def __init__(self, delta=1, period=60, timestamp=None, expiry=None,
+            delta_min=0, delta_factor=1, freeze=False, *a, **kw):
         """
         delta - the change in value made per period of time.
         period - the length of time between application of delta.
         timestamp - the timestamp for which the value was valid (unix
-                    time)
+                    time).  Default: current time.
+        expiry - the timestamp which the assigned value will expire,
+                 i.e. updated.  Default: current time + period
         delta_min - minimum applied delta size, expressed as a fraction
                     of delta.
         delta_factor - post calculation modifier to delta.
         freeze - The timer is frozen onwards from timestamp.
+        full - full value
+        value - the value for the initial level.
+        empty - empty value
         """
 
         assert period > 0
@@ -62,9 +68,13 @@ class TimedBuffer(Buffer):
             # use current time.
             timestamp = int(time.time())
 
+        if expiry is None:
+            expiry = timestamp + period - 1
+
         self.delta = delta
         self.period = period
         self.timestamp = timestamp
+        self.expiry = expiry
         self.delta_min = delta_min
         self.delta_factor = delta_factor
         self.freeze = freeze
@@ -97,16 +107,21 @@ class TimedBuffer(Buffer):
         return freeze is None and self.freeze
 
     def getDeltaTime(self, timestamp=None):
+        """
+        Return time difference from the expiry time.
+        """
+
         if timestamp is None:
             timestamp = int(time.time())
-        return timestamp - self.timestamp
+        return max(timestamp - self.expiry, 0)
 
     def getCyclesElapsed(self, timestamp=None):
         if self.freeze:
             return 0
 
         delta_t = self.getDeltaTime(timestamp)
-        return int(delta_t / self.period)  # truncate decimals.
+        # cannot have negative cycles either.
+        return max(0, int(ceil(1.0 * delta_t / self.period)))
 
     def getCyclesAvailable(self):
         if self.freeze:
@@ -141,9 +156,22 @@ class TimedBuffer(Buffer):
         if timestamp is None:
             timestamp = int(time.time())
 
+        # timestamp need to be fixated onto the initial condition.
+
         cycles_elapsed = self.getCyclesElapsed(timestamp)
         cycles_available = self.getCyclesAvailable()
         cycles_depleted = self.isCyclesDepleted(timestamp)
+
+        # unfreezing is not handled as what might be expected because I
+        # am not sure how to persist partial cycles without introducing
+        # yet another variable.
+        if freeze is False and self.freeze:
+            # trigger the "normal" calculation
+            expiry = None
+        else:
+            # normal calculation
+            expiry = self.expiry + (cycles_elapsed * self.period)
+
         # Figure this out if we are not freezing this.
         freeze = self.isToBeFrozen(timestamp, freeze)
 
@@ -168,6 +196,7 @@ class TimedBuffer(Buffer):
                 delta=self.delta,
                 period=self.period,
                 timestamp=timestamp,
+                expiry=expiry,
                 delta_min=self.delta_min,
                 delta_factor=self.delta_factor,
                 value=value,

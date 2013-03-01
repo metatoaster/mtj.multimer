@@ -91,6 +91,17 @@ class TestTimedBuffer(TestCase):
         self.assertEqual(fp0.empty, self.full_pos.empty)
         self.assertEqual(fp0.value, self.full_pos.value)
 
+    def test_0010_elapsed_cycles(self):
+        """
+        Elapse cycles is to be determined by expiry time >= 0
+        """
+
+        self.assertEqual(self.full_pos.expiry, 3599)
+        self.assertEqual(self.full_pos.getCyclesElapsed(0), 0)
+        self.assertEqual(self.full_pos.getCyclesElapsed(3599), 0)
+        self.assertEqual(self.full_pos.getCyclesElapsed(3600), 1)
+        self.assertEqual(self.full_pos.getCyclesElapsed(7200), 2)
+
     def test_0050_full_continuous(self):
         """
         Test that intermediate buffers can be chained properly.
@@ -101,6 +112,29 @@ class TestTimedBuffer(TestCase):
         fp1 = fp0.getCurrent(3600)
         fp2 = fp1.getCurrent(7200)
         self.assertEqual(fp2.getCurrent(7200).value, 27920)
+
+    def test_0051_partially_continuous(self):
+        """
+        Test that intermediate buffers can be chained properly.
+        """
+
+        fp0 = self.full_pos.getCurrent(0)
+        # half hour.
+        fp1 = fp0.getCurrent(1800)
+        fp2 = fp1.getCurrent(3600)
+
+        self.assertEqual(fp2.getCurrent(3600).value, 27960)
+
+    def test_0060_negative_time(self):
+        """
+        Test for new timestamps that are negative to assigned.
+        """
+
+        pos = self.full_pos.getCurrent(36000)
+        self.assertEqual(pos.getCyclesElapsed(0), 0)
+        final = pos.getCurrent(0)
+        # negative time cannot be used to "time travel"
+        self.assertEqual(final.value, 27600)
 
     def test_0100_standard_inc(self):
         self.bufferChecker(self.zero_silo, 1, 0)
@@ -210,12 +244,23 @@ class TestTimedBuffer(TestCase):
         freeze = TimedBuffer(delta=100, period=3600, timestamp=0,
             delta_min=0.01, delta_factor=1, value=34567, full=75000,
             freeze=True)
+        self.assertEqual(freeze.expiry, 3599)
         timestamp = 7201
         next_buffer = freeze.getCurrent(timestamp, False)
         self.assertFalse(next_buffer.freeze)
+        self.assertEqual(next_buffer.value, 34567)
+        self.assertEqual(next_buffer.expiry, 10800)
         timestamp = 14400
         # Unfrozen from 7201 onwards, 2 hours - second passed, +100.
         self.bufferChecker(next_buffer, timestamp, 34667, False)
+
+    def test_0530_freezing_untracked(self):
+        # a buffer with progress, then frozen, all progress are lost
+        s0 = self.zero_silo.getCurrent(1800, True)
+        s1 = s0.getCurrent(3600, False)
+        s2 = s1.getCurrent(5400, False)
+        self.assertFalse(s2.freeze)
+        self.assertEqual(s2.value, 0)
 
     def test_1000_abnormal_setup(self):
         weird1 = TimedBuffer(delta=40, period=3600, timestamp=0,
