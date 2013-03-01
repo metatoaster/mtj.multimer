@@ -169,6 +169,7 @@ class TimedBuffer(Buffer):
                 period=self.period,
                 timestamp=timestamp,
                 delta_min=self.delta_min,
+                delta_factor=self.delta_factor,
                 value=value,
                 freeze=freeze,
                 *a, **kw

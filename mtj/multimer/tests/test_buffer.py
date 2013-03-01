@@ -78,6 +78,10 @@ class TestTimedBuffer(TestCase):
         self.assertRaises(AssertionError, TimedBuffer, period=0)
         self.assertRaises(AssertionError, TimedBuffer, delta_min=-1)
 
+    def test_0001_base_get(self):
+        fp0 = self.full_pos.getCurrent(0)
+        self.assertEqual(fp0.delta_factor, self.full_pos.delta_factor)
+
     def test_0100_standard_inc(self):
         self.bufferChecker(self.zero_silo, 1, 0)
         self.bufferChecker(self.zero_silo, 3600, 100)
